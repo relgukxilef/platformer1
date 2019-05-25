@@ -11,5 +11,7 @@ uniform view_properties {
 
 void main(void) {
     gl_Position = view_projection * vec4(position, 1.0);
-    vertex_color = vec3(max(0, dot(normal, normalize(vec3(0.25, 0.5, 1)))));
+    vertex_color = vec3(0.5 + 0.5 * dot(
+        normal, normalize(vec3(0.25, 0.5, 1))
+    ));
 }

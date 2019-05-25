@@ -165,10 +165,8 @@ void window_size_callback(GLFWwindow*, int width, int height) {
     glViewport(0, 0, width, height);
 
     projection_matrix = perspective(
-        radians(45.0f), static_cast<float>(width) / height, 0.1f, 100.0f
+        radians(60.f), static_cast<float>(width) / height, 0.1f, 1000.0f
     );
-
-    view_properties->view_projection = projection_matrix * view_matrix;
 }
 
 void cursor_position_callback(GLFWwindow*, double x, double y) {
@@ -263,13 +261,13 @@ int main() {
     mesh ground{
         load_buffer_from_file("models/Plane_vertices.vbo"),
         faces,
-        static_cast<GLint>(size / sizeof(unsigned))
+        size / static_cast<GLint>(sizeof(unsigned))
     };
     faces = load_buffer_from_file("models/Cube_faces.vbo", size);
     mesh player{
         load_buffer_from_file("models/Cube_vertices.vbo"),
         faces,
-        static_cast<GLint>(size / sizeof(unsigned))
+        size / static_cast<GLint>(sizeof(unsigned))
     };
 
     draw_elements_call ground_call{
@@ -327,8 +325,13 @@ int main() {
             model, -physic_players->yaw, {0, 0, 1}
         );
 
+        auto camera_distance = 8.f;
+        camera_distance /= std::max(
+            -cos(physic_players[0].pitch) * camera_distance, 1.f
+        );
+
         view_matrix = translate(
-            mat4(1), {0, 0, -5}
+            mat4(1), {-0.55, 0, -camera_distance}
         );
 
         view_matrix = rotate(
