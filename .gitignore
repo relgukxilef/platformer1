@@ -8,6 +8,7 @@
 !*.pro
 !*.blend
 !*.py
+!*.vbo
 
 !*.txt
 
