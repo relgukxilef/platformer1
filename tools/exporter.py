@@ -20,14 +20,14 @@ import subprocess
 import sys
 
 def write_gi_block(context, filepath):
-    directory, filename = path.split(filepath)
+    directory, _ = path.split(filepath)
 
-    name = bpy.data.objects[0].name
+    object = bpy.context.active_object
+    name = object.name
     vertices = path.join(directory, name + "_vertices.vbo")
     faces = path.join(directory, name + "_faces.vbo")
 
     with open(vertices, "wb") as vertex_file, open(faces, "wb") as faces_file:
-        object = bpy.data.objects[0]
         matrix = object.matrix_world
         
         mesh = object.to_mesh(bpy.context.scene, True, 'RENDER')
