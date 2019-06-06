@@ -16,6 +16,9 @@
 #include <ge1/program.h>
 
 #include "utility/vertex_buffer.h"
+#include "utility/io.h"
+
+#include "physics/physic_mesh.h"
 
 using namespace std;
 using namespace glm;
@@ -43,7 +46,7 @@ enum : GLuint {
     player_properties_binding,
 };
 
-struct mesh {
+struct mesh { // TODO: maybe rename to display_mesh
     mesh(GLuint vertices, GLuint faces, GLint size) :
         vertices(vertices), faces(faces),
         vertex_array(ge1::create_vertex_array(
@@ -54,7 +57,7 @@ struct mesh {
                 }, {
                      this->vertices.get_name(), normal_attribute,
                      3, GL_FLOAT, false, 8 * sizeof(float), 3 * sizeof(float)
-                 }
+                }
             }, this->faces.get_name()
         )),
         size(size)
@@ -247,6 +250,26 @@ int main() {
     composition.passes.push_back(objects_pass);
 
 
+    // TODO: ugly
+    physic_mesh physic_ground;
+    auto vertices = read_file<float>("models/Plane_vertices.vbo");
+    auto vertex_count = vertices.size() / 8;
+    auto* buffer = new vec3[vertex_count];
+    physic_ground.vertices = {buffer, buffer + vertex_count};
+    for (auto i = 0u; i < vertex_count; i++) {
+        buffer[i] = {
+            vertices.begin()[i * 8],
+            vertices.begin()[i * 8 + 1],
+            vertices.begin()[i * 8 + 2]
+        };
+    }
+    delete[] vertices.begin();
+    physic_ground.faces = read_file<unsigned>(
+        "models/Plane_faces.vbo"
+    );
+
+
+
     int width, height;
     glfwGetWindowSize(window, &width, &height);
     window_size_callback(window, width, height);
@@ -341,31 +364,28 @@ int main() {
             model, -player.aim_yaw, {0, 0, 1}
         );
 
-        auto camera_distance = 8.f;
-        camera_distance /= std::max(
-            -cos(player.head_pitch) * camera_distance / player.position.z, 1.f
-        );
-
-        view_matrix = translate(
-            mat4(1), {-0.55, 0, -camera_distance}
-        );
-
         view_matrix = rotate(
-            view_matrix, physic_players[0].head_yaw, {0, 0, 1}
+            mat4(1), physic_players[0].head_yaw, {0, 0, 1}
         );
         view_matrix = rotate(
             view_matrix, physic_players[0].head_pitch,
             {transpose(view_matrix) * vec4(1, 0, 0, 0)}
         );
 
+        auto camera_hit = physic_ground.ray(
+            physic_players[0].position,
+            physic_players[0].position + vec3{vec4{0, 0, 10, 0} * view_matrix}
+        );
+
         view_matrix = translate(
-            view_matrix, -physic_players[0].position
+            view_matrix, -camera_hit.contact_point
         );
 
         view_properties->view_projection = projection_matrix * view_matrix;
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
         composition.render();
 
         glfwSwapBuffers(window);
