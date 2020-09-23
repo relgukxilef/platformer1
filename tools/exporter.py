@@ -30,37 +30,31 @@ def write_gi_block(context, filepath):
     with open(vertices, "wb") as vertex_file, open(faces, "wb") as faces_file:
         matrix = object.matrix_world
         
-        mesh = object.to_mesh(bpy.context.scene, True, 'RENDER')
+        mesh = object.to_mesh()
+        mesh.calc_loop_triangles()
         
-        texture = mesh.tessface_uv_textures["UVMap"]
+        uv_layer = mesh.uv_layers["UVMap"]
         vertex_size = 0
-
-        for face, texture_face in zip(mesh.tessfaces, texture.data):
-            vertex_indices = range(3)
-            if len(face.vertices) == 4:
-                vertex_indices = [0, 1, 2, 2, 3, 0]
-            
-            if len(face.vertices) in [3, 4]:
-                for i in vertex_indices:
-                    faces_file.write(struct.pack('I', vertex_size + i))
-            else:
-                print("Polygon is neither a triangle nor a square. Skipped.")
-
-            for vertex, uv in zip(face.vertices, texture_face.uv):
+        
+        for triangle in mesh.loop_triangles:
+            for vertex_index in triangle.vertices:
+                faces_file.write(struct.pack('I', vertex_size))
+                
                 vertex_file.write(
                     struct.pack(
                         'fff', 
-                        *(matrix * mesh.vertices[vertex].co)
+                        *(matrix @ mesh.vertices[vertex_index].co)
                     ) + 
                     struct.pack(
-                        'fff', *(matrix * Vector(
-                            mesh.vertices[vertex].normal[:] + (0,)
+                        'fff', *(matrix @ Vector(
+                            mesh.vertices[vertex_index].normal[:] + (0,)
                         ))[:3]
                     ) +
-                    struct.pack('ff', *uv)
+                    struct.pack('ff', 0, 0)
                 )
-
+                
                 vertex_size += 1
+                
 
     return {'FINISHED'}
 
