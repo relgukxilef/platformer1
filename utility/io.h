@@ -9,7 +9,7 @@ template<class Type>
 ge1::span<Type> read_file(const char* filename) {
     auto buffer = read_file(filename);
     return {
-        reinterpret_cast<const Type*>(buffer.begin()),
-        reinterpret_cast<const Type*>(buffer.end())
+        reinterpret_cast<Type*>(buffer.begin()),
+        reinterpret_cast<Type*>(buffer.end())
     };
 }

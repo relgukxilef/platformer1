@@ -66,6 +66,6 @@ struct buffer_entry {
 };
 
 // TODO: rename to create_mapped_uniform_buffer
-GLuint create_mapped_buffer(ge1::span<buffer_entry> entries);
+GLuint create_mapped_buffer(ge1::span<const buffer_entry> entries);
 
 

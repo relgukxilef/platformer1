@@ -64,7 +64,7 @@ unsigned ceiling(unsigned x, unsigned y) {
     return (1 + ((x - 1) / y)) * y;
 }
 
-GLuint create_mapped_buffer(ge1::span<buffer_entry> entries) {
+GLuint create_mapped_buffer(ge1::span<const buffer_entry> entries) {
     GLint signed_alignment;
     glGetIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT, &signed_alignment);
     auto alignment = static_cast<unsigned>(signed_alignment);
