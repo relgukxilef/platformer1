@@ -16,4 +16,14 @@ struct physic_mesh {
     };
 
     hit ray(glm::vec3 start, glm::vec3 end) const;
+
+    struct collision {
+        glm::vec3 contact_point, contact_normal;
+        glm::vec3 depth; // moving object by this vector resolves collision
+        unsigned face;
+    };
+
+    unsigned sphere(
+        glm::vec3 center, float radius, ge1::span<collision> collision_buffer
+    );
 };

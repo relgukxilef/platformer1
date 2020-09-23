@@ -136,6 +136,10 @@ struct ability {
     ticks startup, active, recovery;
 };
 
+struct {
+    GLuint swap, present;
+} frame_queries[3];
+
 static mat4 view_matrix, projection_matrix;
 
 void window_size_callback(GLFWwindow*, int width, int height) {
@@ -282,8 +286,20 @@ int main() {
 
     glClearColor(255, 255, 255, 255);
 
+    for (auto &frame_query : frame_queries) {
+        glGenQueries(1, &frame_query.swap);
+        glGenQueries(1, &frame_query.present);
+    }
 
     while (!glfwWindowShouldClose(window)) {
+
+        glfwPollEvents();
+
+        swap(frame_queries[1], frame_queries[0]);
+        swap(frame_queries[2], frame_queries[1]);
+
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
         int joystick_axes_count, joystick_button_count;
         const float* joystick_axes =
             glfwGetJoystickAxes(GLFW_JOYSTICK_1, &joystick_axes_count);
@@ -350,12 +366,21 @@ int main() {
             }
         }
 
-        if (player.position.z < 1) {
-            player.position.z = 1;
-            player.velocity.z = 0;
-            player.on_ground = true;
+        array<physic_mesh::collision, 16> collisions;
+        auto collision_count = physic_ground.sphere(
+            player.position - vec3{0, 0, 0.5}, 0.5,
+            {collisions.begin(), collisions.end()}
+        );
+        for (auto i = 0u; i < collision_count; i++) {
+            auto collision = collisions[i];
+            player.position += collision.depth;
+            player.velocity -=
+                collision.contact_normal *
+                std::min(0.f, dot(player.velocity, collision.contact_normal));
+            if (collision.depth.z > 0) {
+                player.on_ground = true;
+            }
         }
-
 
         auto model = translate(
             mat4(1), player.position
@@ -383,14 +408,37 @@ int main() {
 
         view_properties->view_projection = projection_matrix * view_matrix;
 
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
         composition.render();
+
+        GLsync sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+
+        // TODO: draw query results
+        GLuint64 render_time, present_time;
+        glGetQueryObjectui64v(
+            frame_queries[2].swap, GL_QUERY_RESULT, &render_time
+        );
+        glGetQueryObjectui64v(
+            frame_queries[2].present, GL_QUERY_RESULT, &present_time
+        );
+
+
+        glQueryCounter(frame_queries[0].swap, GL_TIMESTAMP);
 
         glfwSwapBuffers(window);
 
-        glfwPollEvents();
+        glQueryCounter(frame_queries[0].present, GL_TIMESTAMP);
+
+        // wait for drawing to finish. glfwSwapBuffers doesn't ensure that
+        GLenum waitReturn = GL_UNSIGNALED;
+        while (
+            waitReturn != GL_ALREADY_SIGNALED &&
+            waitReturn != GL_CONDITION_SATISFIED
+        ) {
+            waitReturn = glClientWaitSync(
+                sync, GL_SYNC_FLUSH_COMMANDS_BIT, 10
+            );
+        }
+        glDeleteSync(sync);
     }
 
     return 0;
