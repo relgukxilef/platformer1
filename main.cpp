@@ -118,23 +118,26 @@ static float gravity = 2.f / 60;
 
 typedef unsigned ticks;
 
+struct ability {
+    bool interruptible, steerable;
+    vec3 relative_linear_motion;
+    ticks timeout;
+    const ability* next;
+};
+
+const ability
+    idle {true, true, {0, 0, 0}, 0, &idle},
+    evade {false, false, {0, 10, 0}, 200, &idle};
+
 static struct {
-    float aim_yaw = 0, aim_pitch = 0, head_yaw = 0, head_pitch = 0;
-    float jump_force = 1;
+    float head_yaw = 0, head_pitch = 0;
     vec3 position = {0, 0, 1};
     vec3 velocity = {0, 0, 0};
-    enum {
-        none,
-        beam
-    } animation;
-    ticks animation_time;
+    const ability* active_ability = &idle;
+    ticks ability_time;
     glm::vec3 ability_start_position, ability_start_direction;
-    bool on_ground;
-} physic_players[2];
-
-struct ability {
-    ticks startup, active, recovery;
-};
+    bool knocked_up, stunned, invincible;
+} physic_players[1];
 
 struct {
     GLuint swap, present;
@@ -151,8 +154,6 @@ void window_size_callback(GLFWwindow*, int width, int height) {
 }
 
 void cursor_position_callback(GLFWwindow*, double x, double y) {
-    physic_players[0].head_yaw = static_cast<float>(x) * 0.005f;
-    physic_players[0].head_pitch = static_cast<float>(y) * 0.005f;
 }
 
 void mouse_button_callback(
@@ -160,11 +161,7 @@ void mouse_button_callback(
 ) {
     if (action == GLFW_PRESS) {
         if (button == GLFW_MOUSE_BUTTON_LEFT) {
-            auto& player = physic_players[0];
-            if (player.animation == player.none) {
-                player.animation = player.beam;
-                player.animation_time = 0;
-            }
+
         }
     }
 }
@@ -230,10 +227,10 @@ int main() {
     );
 
     mesh ground = load_mesh(
-        "models/Plane_vertices.vbo", "models/Plane_faces.vbo"
+        "models/arena_vertices.vbo", "models/arena_faces.vbo"
     );
     mesh player = load_mesh(
-        "models/Cube_vertices.vbo", "models/Cube_faces.vbo"
+        "models/miku_vertices.vbo", "models/miku_faces.vbo"
     );
 
     draw_elements_call ground_call{
@@ -291,7 +288,15 @@ int main() {
         glGenQueries(1, &frame_query.present);
     }
 
+    vec3 camera_position = vec3(0, -2.0, 1.8);
+
+    float last_frame = glfwGetTime();
+
     while (!glfwWindowShouldClose(window)) {
+        float current_frame = glfwGetTime();
+        float delta_float = current_frame - last_frame;
+        last_frame = current_frame;
+        ticks delta = static_cast<ticks>(delta_float * 1000);
 
         glfwPollEvents();
 
@@ -312,16 +317,20 @@ int main() {
 
         if (joystick_axes_count >= 4 && joystick_axes != nullptr) {
             motion = vec2(joystick_axes[0], joystick_axes[1]);
-
-            player.head_yaw += joystick_axes[2] * 0.05f;
-            player.head_pitch += joystick_axes[3] * -0.05f;
         }
         if (joystick_button_count >= 4 && joystick_buttons != nullptr) {
-            if (joystick_buttons[0] == GLFW_PRESS) {
-                if (player.on_ground) {
-                    player.on_ground = false;
-                    player.velocity.z += player.jump_force;
+            static bool button_0_pressed = false;
+            // if the button is pressed anew befor returning to idle,
+            // should the ability still be activated?
+            if (!button_0_pressed && joystick_buttons[0] == GLFW_PRESS) {
+                button_0_pressed = true;
+                if (player.active_ability == &idle) {
+                    player.active_ability = &evade;
+                    player.ability_time = 0;
                 }
+            }
+            if (button_0_pressed && joystick_buttons[0] == GLFW_RELEASE) {
+                button_0_pressed = false;
             }
         }
 
@@ -337,73 +346,59 @@ int main() {
         if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
             motion.x -= 1;
         }
-        if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) {
-            if (player.on_ground) {
-                player.on_ground = false;
-                player.velocity.z += player.jump_force;
-            }
-        }
+
+        // view_space controls
+        vec2 control_direction =
+            normalize(vec2(player.position) - vec2(camera_position));
         motion *= 1.f / std::max(1.f, length(motion));
         motion = mat2(
-            cos(player.head_yaw), -sin(player.head_yaw),
-            sin(player.head_yaw), cos(player.head_yaw)
+            control_direction.y, -control_direction.x,
+            control_direction.x, control_direction.y
         ) * motion;
-        if (player.animation == player.none) {
-            player.position += vec3(motion, 0) * 0.3f;
+
+        if (player.active_ability->steerable) {
+            player.position += vec3(motion, 0) * 4.0f * delta_float;
+
+            if (dot(motion, motion) > 0.01) {
+                player.head_yaw = atan2f(-motion.x, -motion.y);
+            }
         }
+
+        player.position += mat3(
+            -cos(player.head_yaw), sin(player.head_yaw), 0,
+            -sin(player.head_yaw), -cos(player.head_yaw), 0,
+            0, 0, 0
+        ) * player.active_ability->relative_linear_motion * delta_float;
+
         player.velocity.z -= gravity;
         player.velocity *= 0.95f;
         player.position += player.velocity;
 
-        if (player.animation == player.none) {
-            player.aim_yaw = player.head_yaw;
-            player.aim_pitch = player.head_pitch;
-        } else {
-            player.animation_time++;
-            // TODO: read animation length form ability
-            if (player.animation_time == 60) {
-                player.animation = player.none;
-            }
+        player.ability_time += delta;
+        while (
+            player.ability_time > player.active_ability->timeout &&
+            player.active_ability != player.active_ability->next
+        ) {
+            player.ability_time -= player.active_ability->timeout;
+            player.active_ability = player.active_ability->next;
         }
 
-        array<physic_mesh::collision, 16> collisions;
-        auto collision_count = physic_ground.sphere(
-            player.position - vec3{0, 0, 0.5}, 0.5,
-            {collisions.begin(), collisions.end()}
-        );
-        for (auto i = 0u; i < collision_count; i++) {
-            auto collision = collisions[i];
-            player.position += collision.depth;
-            player.velocity -=
-                collision.contact_normal *
-                std::min(0.f, dot(player.velocity, collision.contact_normal));
-            if (collision.depth.z > 0) {
-                player.on_ground = true;
-            }
+        if (player.position.z < 0) {
+            player.position.z = 0;
+            player.velocity.z = 0;
         }
 
         auto model = translate(
             mat4(1), player.position
         );
         players->model = rotate(
-            model, -player.aim_yaw, {0, 0, 1}
+            model, -player.head_yaw, {0, 0, 1}
         );
 
-        view_matrix = rotate(
-            mat4(1), physic_players[0].head_yaw, {0, 0, 1}
-        );
-        view_matrix = rotate(
-            view_matrix, physic_players[0].head_pitch,
-            {transpose(view_matrix) * vec4(1, 0, 0, 0)}
-        );
-
-        auto camera_hit = physic_ground.ray(
-            physic_players[0].position,
-            physic_players[0].position + vec3{vec4{0, 0, 10, 0} * view_matrix}
-        );
-
-        view_matrix = translate(
-            view_matrix, -camera_hit.contact_point
+        view_matrix = lookAt(
+            camera_position,
+            physic_players[0].position + vec3(0, 0, 1.4),
+            vec3(0, 0, 1)
         );
 
         view_properties->view_projection = projection_matrix * view_matrix;
