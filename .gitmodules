@@ -1,0 +1,3 @@
+[submodule "libs/game_engine1"]
+	path = libs/game_engine1
+	url = https://github.com/relgukxilef/game_engine1.git

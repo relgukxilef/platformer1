@@ -15,5 +15,4 @@
 !.gitignore
 !.gitattributes
 !.gitkeep
-
-libs
+!.gitmodules
