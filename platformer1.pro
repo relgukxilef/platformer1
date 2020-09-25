@@ -1,5 +1,5 @@
 TEMPLATE = app
-CONFIG += console c++14 Wall
+CONFIG += console c++17 Wall
 CONFIG -= app_bundle
 CONFIG -= qt
 CONFIG += object_parallel_to_source
@@ -20,7 +20,7 @@ SOURCES += \
 
 INCLUDEPATH += libs
 
-include("libs/ge1/ge1.pri")
+include("libs/game_engine1/ge1.pri")
 
 DISTFILES += \
     shader/ground_fragment.glsl \
