@@ -20,6 +20,9 @@
 
 #include "physics/physic_mesh.h"
 
+#include "gameplay/game.h"
+#include "rendering/rendering.h"
+
 using namespace std;
 using namespace glm;
 
@@ -43,7 +46,6 @@ enum : GLuint {
 };
 enum : GLuint {
     view_properties_binding,
-    player_properties_binding,
 };
 
 struct mesh { // TODO: maybe rename to display_mesh
@@ -110,12 +112,6 @@ static struct {
     mat4 view_projection;
 } *view_properties;
 
-static struct player_properties {
-    mat4 model;
-} *players;
-
-static float gravity = 2.f / 60;
-
 typedef unsigned ticks;
 
 struct ability {
@@ -130,8 +126,6 @@ const ability
     evade {false, false, {0, 10, 0}, 200, &idle};
 
 static struct {
-    float head_yaw = 0, head_pitch = 0;
-    vec3 position = {0, 0, 1};
     vec3 velocity = {0, 0, 0};
     const ability* active_ability = &idle;
     ticks ability_time;
@@ -201,9 +195,8 @@ int main() {
 
     view_matrix = lookAt(vec3{0, 5, 1}, {0, 0, 1}, {0, 0, 1});
 
-    ge1::unique_buffer properties_buffer = create_mapped_buffer({
+    ge1::unique_buffer properties_buffer = create_mapped_uniform_buffer({
         {view_properties_binding, view_properties},
-        {player_properties_binding, players, 2},
     });
 
     ge1::unique_program ground_program = ge1::compile_program(
@@ -216,20 +209,10 @@ int main() {
         {{"view_properties", view_properties_binding}}
     );
 
-    ge1::unique_program player_program = ge1::compile_program(
-        "shader/player_vertex.glsl", nullptr, nullptr, nullptr,
-        "shader/player_fragment.glsl", {},
-        {{"position", position_attribute}}, {},
-        {
-            {"view_properties", view_properties_binding},
-            {"player_properties", player_properties_binding}
-        }
-    );
-
     mesh ground = load_mesh(
         "models/arena_vertices.vbo", "models/arena_faces.vbo"
     );
-    mesh player = load_mesh(
+    mesh player_mesh = load_mesh(
         "models/miku_vertices.vbo", "models/miku_faces.vbo"
     );
 
@@ -237,19 +220,15 @@ int main() {
         ground.vertex_array.get_name(), ground.size,
         ground_program.get_name(), GL_TRIANGLES, GL_UNSIGNED_INT
     };
-    draw_elements_call player_call{
-        player.vertex_array.get_name(), player.size,
-        player_program.get_name(), GL_TRIANGLES, GL_UNSIGNED_INT
-    };
-
 
     ge1::pass objects_pass;
     objects_pass.renderables.push_back(ground_call);
-    objects_pass.renderables.push_back(player_call);
 
     ge1::composition composition;
     composition.passes.push_back(objects_pass);
 
+    rendering::game render_game;
+    gameplay::game game;
 
     // TODO: ugly
     physic_mesh physic_ground;
@@ -268,8 +247,6 @@ int main() {
     physic_ground.faces = read_file<unsigned>(
         "models/Plane_faces.vbo"
     );
-
-
 
     int width, height;
     glfwGetWindowSize(window, &width, &height);
@@ -348,8 +325,9 @@ int main() {
         }
 
         // view_space controls
-        vec2 control_direction =
-            normalize(vec2(player.position) - vec2(camera_position));
+        vec2 control_direction = normalize(
+            vec2(game.player.position) - vec2(camera_position)
+        );
         motion *= 1.f / std::max(1.f, length(motion));
         motion = mat2(
             control_direction.y, -control_direction.x,
@@ -357,22 +335,22 @@ int main() {
         ) * motion;
 
         if (player.active_ability->steerable) {
-            player.position += vec3(motion, 0) * 4.0f * delta_float;
+            game.player.position += vec3(motion, 0) * 4.0f * delta_float;
 
             if (dot(motion, motion) > 0.01) {
-                player.head_yaw = atan2f(-motion.x, -motion.y);
+                game.player.yaw = atan2f(-motion.x, -motion.y);
             }
         }
 
-        player.position += mat3(
-            -cos(player.head_yaw), sin(player.head_yaw), 0,
-            -sin(player.head_yaw), -cos(player.head_yaw), 0,
+        /*player.t.position += mat3(
+            -cos(game.player.yaw), sin(game.player.yaw), 0,
+            -sin(game.player.yaw), -cos(game.player.yaw), 0,
             0, 0, 0
-        ) * player.active_ability->relative_linear_motion * delta_float;
+        ) * player.active_ability->relative_linear_motion * delta_float;*/
 
-        player.velocity.z -= gravity;
-        player.velocity *= 0.95f;
-        player.position += player.velocity;
+        //player.velocity.z -= gravity;
+        //player.velocity *= 0.95f;
+        game.player.position += player.velocity;
 
         player.ability_time += delta;
         while (
@@ -383,25 +361,16 @@ int main() {
             player.active_ability = player.active_ability->next;
         }
 
-        if (player.position.z < 0) {
-            player.position.z = 0;
-            player.velocity.z = 0;
-        }
-
-        auto model = translate(
-            mat4(1), player.position
-        );
-        players->model = rotate(
-            model, -player.head_yaw, {0, 0, 1}
-        );
-
         view_matrix = lookAt(
             camera_position,
-            physic_players[0].position + vec3(0, 0, 1.4),
+            game.player.position + vec3(0, 0, 1.4),
             vec3(0, 0, 1)
         );
 
         view_properties->view_projection = projection_matrix * view_matrix;
+
+        render_game.update(game);
+        render_game.render();
 
         composition.render();
 

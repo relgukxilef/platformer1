@@ -13,8 +13,10 @@ DEFINES += GLEW_STATIC
 win32: LIBS += -lglfw3dll -lglew32s -lopengl32
 
 SOURCES += \
+    gameplay/game.cpp \
     main.cpp \
     physics/physic_mesh.cpp \
+    rendering/rendering.cpp \
     utility/io.cpp \
     utility/vertex_buffer.cpp
 
@@ -23,12 +25,14 @@ INCLUDEPATH += libs
 include("libs/game_engine1/ge1.pri")
 
 DISTFILES += \
+    shader/agent_fragment.glsl \
+    shader/agent_vertex.glsl \
     shader/ground_fragment.glsl \
-    shader/ground_vertex.glsl \
-    shader/player_fragment.glsl \
-    shader/player_vertex.glsl
+    shader/ground_vertex.glsl
 
 HEADERS += \
+    gameplay/game.h \
     physics/physic_mesh.h \
+    rendering/rendering.h \
     utility/io.h \
     utility/vertex_buffer.h

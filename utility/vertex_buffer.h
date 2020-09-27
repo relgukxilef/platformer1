@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdexcept>
+
 #include <GL/glew.h>
 
 #include <ge1/span.h>
@@ -7,7 +9,7 @@
 // This file should be added to ge1
 
 template<class T>
-GLuint create_mapped_buffer(T *&data) {
+GLuint create_mapped_uniform_buffer(T *&data) {
     GLuint name;
     glGenBuffers(1, &name);
 
@@ -65,7 +67,26 @@ struct buffer_entry {
     GLuint binding;
 };
 
-// TODO: rename to create_mapped_uniform_buffer
-GLuint create_mapped_buffer(ge1::span<const buffer_entry> entries);
+GLuint create_mapped_uniform_buffer(ge1::span<const buffer_entry> entries);
+
+template <class T>
+ge1::span<T> create_mapped_buffer(GLuint& name, unsigned size) {
+    glGenBuffers(1, &name);
+
+    glBindBuffer(GL_COPY_WRITE_BUFFER, name);
+    glBufferStorage(
+        GL_COPY_WRITE_BUFFER, size * sizeof(T), nullptr,
+        GL_MAP_COHERENT_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_WRITE_BIT
+    );
+    T* pointer = reinterpret_cast<T*>(glMapBufferRange(
+        GL_COPY_WRITE_BUFFER, 0, size * sizeof(T),
+        GL_MAP_COHERENT_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_WRITE_BIT
+    ));
+
+    if (pointer == nullptr)
+        throw std::runtime_error("Mapping of buffer failed");
+
+    return {pointer, pointer + size};
+}
 
 
