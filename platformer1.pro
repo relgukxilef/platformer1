@@ -13,7 +13,7 @@ DEFINES += GLEW_STATIC
 win32: LIBS += -lglfw3dll -lglew32s -lopengl32
 
 SOURCES += \
-    gameplay/game.cpp \
+    gameplay/gameplay.cpp \
     main.cpp \
     physics/physic_mesh.cpp \
     rendering/rendering.cpp \
@@ -31,7 +31,7 @@ DISTFILES += \
     shader/ground_vertex.glsl
 
 HEADERS += \
-    gameplay/game.h \
+    gameplay/gameplay.h \
     physics/physic_mesh.h \
     rendering/rendering.h \
     utility/io.h \

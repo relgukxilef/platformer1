@@ -6,7 +6,7 @@
 #include <ge1/program.h>
 #include <ge1/vertex_array.h>
 
-#include "gameplay/game.h"
+#include "gameplay/gameplay.h"
 
 namespace rendering {
     struct mesh {

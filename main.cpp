@@ -20,7 +20,7 @@
 
 #include "physics/physic_mesh.h"
 
-#include "gameplay/game.h"
+#include "gameplay/gameplay.h"
 #include "rendering/rendering.h"
 
 using namespace std;
@@ -111,27 +111,6 @@ struct draw_elements_call : public ge1::renderable {
 static struct {
     mat4 view_projection;
 } *view_properties;
-
-typedef unsigned ticks;
-
-struct ability {
-    bool interruptible, steerable;
-    vec3 relative_linear_motion;
-    ticks timeout;
-    const ability* next;
-};
-
-const ability
-    idle {true, true, {0, 0, 0}, 0, &idle},
-    evade {false, false, {0, 10, 0}, 200, &idle};
-
-static struct {
-    vec3 velocity = {0, 0, 0};
-    const ability* active_ability = &idle;
-    ticks ability_time;
-    glm::vec3 ability_start_position, ability_start_direction;
-    bool knocked_up, stunned, invincible;
-} physic_players[1];
 
 struct {
     GLuint swap, present;
@@ -273,7 +252,6 @@ int main() {
         float current_frame = glfwGetTime();
         float delta_float = current_frame - last_frame;
         last_frame = current_frame;
-        ticks delta = static_cast<ticks>(delta_float * 1000);
 
         glfwPollEvents();
 
@@ -282,13 +260,13 @@ int main() {
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        gameplay::input input;
+
         int joystick_axes_count, joystick_button_count;
         const float* joystick_axes =
             glfwGetJoystickAxes(GLFW_JOYSTICK_1, &joystick_axes_count);
         const unsigned char* joystick_buttons =
             glfwGetJoystickButtons(GLFW_JOYSTICK_1, &joystick_button_count);
-
-        auto& player = physic_players[0];
 
         vec2 motion{};
 
@@ -296,19 +274,7 @@ int main() {
             motion = vec2(joystick_axes[0], joystick_axes[1]);
         }
         if (joystick_button_count >= 4 && joystick_buttons != nullptr) {
-            static bool button_0_pressed = false;
-            // if the button is pressed anew befor returning to idle,
-            // should the ability still be activated?
-            if (!button_0_pressed && joystick_buttons[0] == GLFW_PRESS) {
-                button_0_pressed = true;
-                if (player.active_ability == &idle) {
-                    player.active_ability = &evade;
-                    player.ability_time = 0;
-                }
-            }
-            if (button_0_pressed && joystick_buttons[0] == GLFW_RELEASE) {
-                button_0_pressed = false;
-            }
+            input.buttons[input.evade] = joystick_buttons[0] == GLFW_PRESS;
         }
 
         if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
@@ -328,38 +294,14 @@ int main() {
         vec2 control_direction = normalize(
             vec2(game.player.position) - vec2(camera_position)
         );
-        motion *= 1.f / std::max(1.f, length(motion));
         motion = mat2(
             control_direction.y, -control_direction.x,
             control_direction.x, control_direction.y
         ) * motion;
 
-        if (player.active_ability->steerable) {
-            game.player.position += vec3(motion, 0) * 4.0f * delta_float;
+        input.motion = motion;
 
-            if (dot(motion, motion) > 0.01) {
-                game.player.yaw = atan2f(-motion.x, -motion.y);
-            }
-        }
-
-        /*player.t.position += mat3(
-            -cos(game.player.yaw), sin(game.player.yaw), 0,
-            -sin(game.player.yaw), -cos(game.player.yaw), 0,
-            0, 0, 0
-        ) * player.active_ability->relative_linear_motion * delta_float;*/
-
-        //player.velocity.z -= gravity;
-        //player.velocity *= 0.95f;
-        game.player.position += player.velocity;
-
-        player.ability_time += delta;
-        while (
-            player.ability_time > player.active_ability->timeout &&
-            player.active_ability != player.active_ability->next
-        ) {
-            player.ability_time -= player.active_ability->timeout;
-            player.active_ability = player.active_ability->next;
-        }
+        game.update(input, delta_float);
 
         view_matrix = lookAt(
             camera_position,
