@@ -41,7 +41,7 @@ namespace gameplay {
         const state* state;
     };
 
-    extern const state dead, hit, charging, evading;
+    extern const state dead, hit, charging, evading, attacking;
 
     struct agent {
         glm::vec3 position;

@@ -6,8 +6,9 @@ const state
     gameplay::dead {none, {}, 0, &dead},
     idle {interruptible | cancelable | steerable | targetable, {}, 0, &idle},
     gameplay::evading {none, {0, 0, 0}, 0.4, &idle},
-    gameplay::charging {interruptible | targetable, {}, 0.8, &idle},
+    gameplay::charging {targetable, {}, 0.8, &idle},
     gameplay::hit {targetable, {}, 0.3, &idle},
+    gameplay::attacking {targetable, {}, 0.1, &idle},
     stunned {interruptible | cancelable | targetable, {}, 0.5, &idle};
 
 game::game() {
@@ -32,6 +33,11 @@ void update(game& game, agent& agent, float delta) {
                 game.player.active_state = &hit;
                 game.player.state_time = 0;
             }
+        } else if (agent.active_state == &attacking) {
+            if (game.enemies[0].active_state->flags & interruptible) {
+                game.enemies[0].active_state = &hit;
+                game.enemies[0].state_time = 0;
+            }
         }
 
         agent.state_time -= agent.active_state->time_out;
@@ -54,6 +60,12 @@ void gameplay::game::update(const gameplay::input& input, float delta) {
     if (pressed[input::evade]) {
         if (player.active_state->flags & cancelable) {
             player.active_state = &evading;
+            player.state_time = 0;
+        }
+    }
+    if (pressed[input::normal_attack]) {
+        if (player.active_state->flags & cancelable) {
+            player.active_state = &attacking;
             player.state_time = 0;
         }
     }

@@ -275,6 +275,8 @@ int main() {
         }
         if (joystick_button_count >= 4 && joystick_buttons != nullptr) {
             input.buttons[input.evade] = joystick_buttons[0] == GLFW_PRESS;
+            input.buttons[input.normal_attack] =
+                joystick_buttons[1] == GLFW_PRESS;
         }
 
         if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
