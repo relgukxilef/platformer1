@@ -23,12 +23,14 @@ namespace rendering {
             // TODO: skeleton information
             ge1::span<ge1::draw_elements_indirect_command> command;
             ge1::span<mesh> mesh;
+            ge1::span<glm::vec4> flash_color;
         } agents;
 
         ge1::unique_buffer mesh_vertex_buffer;
         ge1::unique_buffer mesh_face_buffer;
         unsigned agent_command_buffer;
         unsigned agent_model_buffer;
+        unsigned agent_flash_color_buffer;
 
         ge1::unique_program agent_program;
         ge1::unique_vertex_array agent_vertex_array;

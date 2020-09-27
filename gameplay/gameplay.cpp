@@ -3,9 +3,11 @@
 using namespace gameplay;
 
 const state
-    gameplay::dead {none, {}, -1, &dead},
-    idle {interruptible | cancelable | steerable | targetable, {}, -1, &idle},
-    evading {none, {0, 10, 0}, 0.15, &idle},
+    gameplay::dead {none, {}, 0, &dead},
+    idle {interruptible | cancelable | steerable | targetable, {}, 0, &idle},
+    gameplay::evading {none, {0, 0, 0}, 0.4, &idle},
+    gameplay::charging {interruptible | targetable, {}, 0.8, &idle},
+    gameplay::hit {targetable, {}, 0.3, &idle},
     stunned {interruptible | cancelable | targetable, {}, 0.5, &idle};
 
 game::game() {
@@ -18,12 +20,20 @@ game::game() {
     enemies[0].active_state = &idle;
 }
 
-void update(agent& agent, float delta) {
+void update(game& game, agent& agent, float delta) {
     agent.state_time += delta;
     while (
         agent.state_time > agent.active_state->time_out &&
         agent.active_state != agent.active_state->next
     ) {
+        // apply transitation effects
+        if (agent.active_state == &charging) {
+            if (game.player.active_state->flags & interruptible) {
+                game.player.active_state = &hit;
+                game.player.state_time = 0;
+            }
+        }
+
         agent.state_time -= agent.active_state->time_out;
         agent.active_state = agent.active_state->next;
     }
@@ -32,11 +42,6 @@ void update(agent& agent, float delta) {
 void gameplay::game::update(const gameplay::input& input, float delta) {
     glm::vec2 motion = input.motion;
     motion *= 1.f / std::max(1.f, length(motion));
-
-    ::update(player, delta);
-    for (auto& enemy : enemies) {
-        ::update(enemy, delta);
-    }
 
     // buttons
     bool pressed[BUTTON_COUNT];
@@ -68,4 +73,19 @@ void gameplay::game::update(const gameplay::input& input, float delta) {
         -sin(player.yaw), -cos(player.yaw), 0,
         0, 0, 0
     ) * player.active_state->relative_linear_motion * delta;
+
+    // AI
+    for (auto& enemy : enemies) {
+        if (enemy.active_state == &idle && enemy.state_time > 2) {
+            enemy.active_state = &charging;
+            enemy.state_time = 0;
+        }
+    }
+
+    // logic
+    ::update(*this, player, delta);
+    for (auto& enemy : enemies) {
+        ::update(*this, enemy, delta);
+    }
+
 }

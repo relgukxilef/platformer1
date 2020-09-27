@@ -35,7 +35,13 @@ namespace gameplay {
         const state* next;
     };
 
-    extern const state dead;
+    struct event {
+        bool area_of_effect, lock_on;
+        bool affects_team, affects_opponent;
+        const state* state;
+    };
+
+    extern const state dead, hit, charging, evading;
 
     struct agent {
         glm::vec3 position;

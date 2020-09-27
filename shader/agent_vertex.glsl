@@ -7,8 +7,10 @@ in vec4 model_transposed_0;
 in vec4 model_transposed_1;
 in vec4 model_transposed_2;
 
-//out vec3 vertex_color;
+in vec4 flash_color;
+
 out vec3 world_normal;
+out vec4 vertex_flash_color;
 
 uniform view_properties {
     mat4 view_projection;
@@ -22,4 +24,5 @@ void main(void) {
     gl_Position =
         view_projection * vec4(vec4(position, 1.0) * model_transposed, 1.0);
     world_normal = normalize(normal) * mat3(model_transposed);
+    vertex_flash_color = flash_color;
 }

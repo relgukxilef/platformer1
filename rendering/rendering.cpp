@@ -3,6 +3,7 @@
 #include <vector>
 #include <fstream>
 #include <iterator>
+#include <algorithm>
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -36,6 +37,7 @@ enum : GLuint {
     model_0_attribute,
     model_1_attribute,
     model_2_attribute,
+    flash_color_attribute,
 };
 enum : GLuint {
     view_properties_binding,
@@ -59,6 +61,10 @@ rendering::game::game() {
     );
     agents.model_transposed = create_mapped_buffer<glm::mat3x4>(
         agent_model_buffer, MAX_AGENT_COUNT
+    );
+
+    agents.flash_color = create_mapped_buffer<glm::vec4>(
+        agent_flash_color_buffer, MAX_AGENT_COUNT
     );
 
     std::vector<unsigned char> vertices;
@@ -107,12 +113,16 @@ rendering::game::game() {
             }, {
                 agent_model_buffer, model_2_attribute,
                 4, GL_FLOAT, false, 3 * 4 * sizeof(float), 8 * sizeof(float)
+            }, {
+                agent_flash_color_buffer, flash_color_attribute,
+                4, GL_FLOAT, false, 4 * sizeof(float), 0
             }
         }, mesh_face_buffer.get_name(), agent_command_buffer
     );
     glVertexAttribDivisor(model_0_attribute, 1);
     glVertexAttribDivisor(model_1_attribute, 1);
     glVertexAttribDivisor(model_2_attribute, 1);
+    glVertexAttribDivisor(flash_color_attribute, 1);
 
     for (auto i = 0u; i < agents.command.size(); i++) {
         agents.command[i] = {0, 0, 0, 0, i};
@@ -125,9 +135,28 @@ rendering::game::game() {
     agents.command[0].first_index = agents.mesh[0].first_index;
 }
 
+void update(game &game, unsigned index, const gameplay::agent& agent) {
+    if (agent.active_state == &gameplay::hit) {
+        game.agents.flash_color[index] = glm::vec4(
+            1, 0, 0, std::max(1 - agent.state_time / 0.1f, 0.f)
+        );
+    } else if (agent.active_state == &gameplay::charging) {
+        game.agents.flash_color[index] = glm::vec4(
+            0, 0, 1, std::max(1 - agent.state_time / 0.1f, 0.f)
+        );
+    } else if (agent.active_state == &gameplay::evading) {
+        game.agents.flash_color[index] = glm::vec4(
+            0, 1, 0, 0.5
+        );
+    } else {
+        game.agents.flash_color[index] = glm::vec4(0);
+    }
+}
+
 void game::update(const gameplay::game& g) {
     agents.model_transposed[0] =
         get_model_matrix_transposed({g.player.position, g.player.yaw});
+    ::update(*this, 0, g.player);
 
     for (auto i = 0u; i < gameplay::MAX_ENEMY_COUNT; i++) {
         const auto& enemy = g.enemies[i];
@@ -143,6 +172,7 @@ void game::update(const gameplay::game& g) {
         } else {
             agents.command[i + MAX_PLAYER_COUNT].instance_count = 0;
         }
+        ::update(*this, i + MAX_PLAYER_COUNT, enemy);
     }
 }
 
