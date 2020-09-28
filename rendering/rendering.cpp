@@ -4,10 +4,13 @@
 #include <fstream>
 #include <iterator>
 #include <algorithm>
+#include <stdexcept>
 
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <GL/glew.h>
+
+#include "vr.h"
 
 #include "utility/vertex_buffer.h"
 
@@ -46,6 +49,51 @@ enum : GLuint {
 };
 
 rendering::game::game() {
+    vr = new vr_window();
+
+    glGenFramebuffers(2, eye_framebuffers);
+    glGenRenderbuffers(2, eye_renderbuffers);
+    glGenTextures(2, eye_textures);
+
+    for (auto i = 0u; i < 2; i++) {
+        // render buffers
+        glBindFramebuffer(GL_FRAMEBUFFER, eye_framebuffers[i]);
+        glBindRenderbuffer(GL_RENDERBUFFER, eye_framebuffers[i]);
+        glRenderbufferStorage(
+            GL_RENDERBUFFER, GL_DEPTH_COMPONENT, vr->width, vr->height
+        );
+        glFramebufferRenderbuffer(
+            GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+            GL_RENDERBUFFER, eye_renderbuffers[i]
+        );
+        glBindTexture(GL_TEXTURE_2D, eye_textures[i]);
+        glTexImage2D(
+            GL_TEXTURE_2D, 0, GL_RGBA8,
+            static_cast<GLsizei>(vr->width),
+            static_cast<GLsizei>(vr->height),
+            0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr
+        );
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+        glFramebufferTexture2D(
+            GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+            GL_TEXTURE_2D, eye_textures[i], 0
+        );
+
+        if (
+            glCheckFramebufferStatus(GL_FRAMEBUFFER) !=
+            GL_FRAMEBUFFER_COMPLETE
+        ) {
+            throw std::runtime_error("Incomplete framebuffer");
+        }
+
+        views[i] = create_mapped_buffer<view>(
+            view_buffer[i], sizeof(view)
+        );
+    }
+
+    vr->set_textures(eye_textures[0], eye_textures[1]);
+
 
     agent_program = ge1::compile_program(
         "shader/agent_vertex.glsl", nullptr, nullptr, nullptr,
@@ -135,6 +183,10 @@ rendering::game::game() {
     agents.command[0].first_index = agents.mesh[0].first_index;
 }
 
+game::~game() {
+    delete vr;
+}
+
 void update(game &game, unsigned index, const gameplay::agent& agent) {
     if (agent.active_state == &gameplay::hit) {
         game.agents.flash_color[index] = glm::vec4(
@@ -177,16 +229,35 @@ void game::update(const gameplay::game& g) {
 }
 
 void rendering::game::render() {
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    vr->wait_and_poll();
 
-    // TODO: render environment
+    glFinish();
+    for (auto i = 0u; i < 2; i++) {
+        views[i][0].view_projection = vr->view_projection_matrices[i];
+    }
 
-    // render players and enemies
-    glUseProgram(agent_program.get_name());
-    glBindVertexArray(agent_vertex_array.get_name());
-    glMultiDrawElementsIndirect(
-        GL_TRIANGLES, GL_UNSIGNED_INT, nullptr,
-        MAX_AGENT_COUNT,
-        sizeof(ge1::draw_elements_indirect_command)
-    );
+    for (auto i = 0u; i < 2; i++) {
+        glBindFramebuffer(GL_FRAMEBUFFER, eye_framebuffers[i]);
+
+        glViewport(0, 0, vr->width, vr->height);
+
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        glBindBufferBase(
+            GL_UNIFORM_BUFFER, view_properties_binding, view_buffer[i]
+        );
+
+        // TODO: render environment
+
+        // render players and enemies
+        glUseProgram(agent_program.get_name());
+        glBindVertexArray(agent_vertex_array.get_name());
+        glMultiDrawElementsIndirect(
+            GL_TRIANGLES, GL_UNSIGNED_INT, nullptr,
+            MAX_AGENT_COUNT,
+            sizeof(ge1::draw_elements_indirect_command)
+        );
+    }
+
+    vr->submit();
 }

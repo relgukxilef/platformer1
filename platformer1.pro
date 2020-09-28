@@ -10,13 +10,14 @@ QMAKE_LFLAGS_RELEASE += -flto
 
 DEFINES += GLEW_STATIC
 
-win32: LIBS += -lglfw3dll -lglew32s -lopengl32
+win32: LIBS += -lglfw3dll -lglew32s -lopengl32 -lopenvr_api
 
 SOURCES += \
     gameplay/gameplay.cpp \
     main.cpp \
     physics/physic_mesh.cpp \
     rendering/rendering.cpp \
+    rendering/vr.cpp \
     utility/io.cpp \
     utility/vertex_buffer.cpp
 
@@ -34,5 +35,6 @@ HEADERS += \
     gameplay/gameplay.h \
     physics/physic_mesh.h \
     rendering/rendering.h \
+    rendering/vr.h \
     utility/io.h \
     utility/vertex_buffer.h

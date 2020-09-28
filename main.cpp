@@ -108,14 +108,6 @@ struct draw_elements_call : public ge1::renderable {
     GLenum type;
 };
 
-static struct {
-    mat4 view_projection;
-} *view_properties;
-
-struct {
-    GLuint swap, present;
-} frame_queries[3];
-
 static mat4 view_matrix, projection_matrix;
 
 void window_size_callback(GLFWwindow*, int width, int height) {
@@ -149,7 +141,7 @@ int main() {
     GLFWwindow* window;
 
     glfwWindowHint(GLFW_SAMPLES, 8);
-    glfwSwapInterval(1);
+    glfwSwapInterval(0);
 
     GLFWmonitor *monitor = glfwGetPrimaryMonitor();
     const GLFWvidmode *mode = glfwGetVideoMode(monitor);
@@ -173,10 +165,6 @@ int main() {
     glCullFace(GL_BACK);
 
     view_matrix = lookAt(vec3{0, 5, 1}, {0, 0, 1}, {0, 0, 1});
-
-    ge1::unique_buffer properties_buffer = create_mapped_uniform_buffer({
-        {view_properties_binding, view_properties},
-    });
 
     ge1::unique_program ground_program = ge1::compile_program(
         "shader/ground_vertex.glsl", nullptr, nullptr, nullptr,
@@ -239,11 +227,6 @@ int main() {
 
     glClearColor(255, 255, 255, 255);
 
-    for (auto &frame_query : frame_queries) {
-        glGenQueries(1, &frame_query.swap);
-        glGenQueries(1, &frame_query.present);
-    }
-
     vec3 camera_position = vec3(0, -2.0, 1.8);
 
     float last_frame = glfwGetTime();
@@ -254,9 +237,6 @@ int main() {
         last_frame = current_frame;
 
         glfwPollEvents();
-
-        swap(frame_queries[1], frame_queries[0]);
-        swap(frame_queries[2], frame_queries[1]);
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -311,42 +291,12 @@ int main() {
             vec3(0, 0, 1)
         );
 
-        view_properties->view_projection = projection_matrix * view_matrix;
-
         render_game.update(game);
         render_game.render();
 
         composition.render();
 
-        GLsync sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-
-        // TODO: draw query results
-        GLuint64 render_time, present_time;
-        glGetQueryObjectui64v(
-            frame_queries[2].swap, GL_QUERY_RESULT, &render_time
-        );
-        glGetQueryObjectui64v(
-            frame_queries[2].present, GL_QUERY_RESULT, &present_time
-        );
-
-
-        glQueryCounter(frame_queries[0].swap, GL_TIMESTAMP);
-
         glfwSwapBuffers(window);
-
-        glQueryCounter(frame_queries[0].present, GL_TIMESTAMP);
-
-        // wait for drawing to finish. glfwSwapBuffers doesn't ensure that
-        GLenum waitReturn = GL_UNSIGNALED;
-        while (
-            waitReturn != GL_ALREADY_SIGNALED &&
-            waitReturn != GL_CONDITION_SATISFIED
-        ) {
-            waitReturn = glClientWaitSync(
-                sync, GL_SYNC_FLUSH_COMMANDS_BIT, 10
-            );
-        }
-        glDeleteSync(sync);
     }
 
     return 0;
