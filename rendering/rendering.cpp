@@ -181,6 +181,38 @@ rendering::game::game() {
     agents.command[0].count = agents.mesh[0].count;
     agents.command[0].base_vertex = agents.mesh[0].base_vertex;
     agents.command[0].first_index = agents.mesh[0].first_index;
+
+
+    // load arena
+    arena_program = ge1::compile_program(
+        "shader/ground_vertex.glsl", nullptr, nullptr, nullptr,
+        "shader/ground_fragment.glsl", {},
+        {
+            {"position", position_attribute},
+            {"normal", normal_attribute},
+        }
+    );
+    ge1::bind_uniform_blocks(agent_program.get_name(), {
+       {"view_properties", view_properties_binding}
+    });
+
+    arena_vertex_buffer = load_buffer_from_file("models/arena_vertices.vbo");
+    GLint arena_size;
+    arena_face_buffer =
+        load_buffer_from_file("models/arena_faces.vbo", arena_size);
+    arena_count = arena_size;
+
+    arena_vertex_array = ge1::create_vertex_array(
+        {
+            {
+                arena_vertex_buffer.get_name(), position_attribute,
+                3, GL_FLOAT, false, 8 * sizeof(float), 0
+            }, {
+                 arena_vertex_buffer.get_name(), normal_attribute,
+                 3, GL_FLOAT, false, 8 * sizeof(float), 3 * sizeof(float)
+            }
+        }, arena_face_buffer.get_name()
+    );
 }
 
 game::~game() {
@@ -247,7 +279,10 @@ void rendering::game::render() {
             GL_UNIFORM_BUFFER, view_properties_binding, view_buffer[i]
         );
 
-        // TODO: render environment
+        // render environment
+        glUseProgram(arena_program.get_name());
+        glBindVertexArray(arena_vertex_array.get_name());
+        glDrawElements(GL_TRIANGLES, arena_count, GL_UNSIGNED_INT, 0);
 
         // render players and enemies
         glUseProgram(agent_program.get_name());
@@ -259,5 +294,30 @@ void rendering::game::render() {
         );
     }
 
+    // render desktop view
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    float scale = std::min(
+        static_cast<float>(vr->width) / desktop_width,
+        static_cast<float>(vr->height) / desktop_height
+    );
+
+    GLint
+        left = 0.5 * (vr->width - desktop_width * scale),
+        right = vr->width - left,
+        bottom = 0.5 * (vr->height - desktop_height * scale),
+        top = vr->height - bottom;
+
+    glBlitFramebuffer(
+        left, bottom, right, top,
+        0, 0, desktop_width, desktop_height,
+        GL_COLOR_BUFFER_BIT, GL_LINEAR
+    );
+
+    // TODO: desktop only rendering?
     vr->submit();
+}
+
+void game::set_desktop_size(unsigned width, unsigned height) {
+    desktop_width = width;
+    desktop_height = height;
 }

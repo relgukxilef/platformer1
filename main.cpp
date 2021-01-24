@@ -108,14 +108,11 @@ struct draw_elements_call : public ge1::renderable {
     GLenum type;
 };
 
-static mat4 view_matrix, projection_matrix;
+static mat4 view_matrix;
+rendering::game* render_game_pointer;
 
 void window_size_callback(GLFWwindow*, int width, int height) {
-    glViewport(0, 0, width, height);
-
-    projection_matrix = perspective(
-        radians(60.f), static_cast<float>(width) / height, 0.1f, 1000.0f
-    );
+    render_game_pointer->set_desktop_size(width, height);
 }
 
 void cursor_position_callback(GLFWwindow*, double x, double y) {
@@ -140,7 +137,7 @@ void key_callback(
 int main() {
     GLFWwindow* window;
 
-    glfwWindowHint(GLFW_SAMPLES, 8);
+    glfwWindowHint(GLFW_SAMPLES, 0);
     glfwSwapInterval(0);
 
     GLFWmonitor *monitor = glfwGetPrimaryMonitor();
@@ -166,34 +163,6 @@ int main() {
 
     view_matrix = lookAt(vec3{0, 5, 1}, {0, 0, 1}, {0, 0, 1});
 
-    ge1::unique_program ground_program = ge1::compile_program(
-        "shader/ground_vertex.glsl", nullptr, nullptr, nullptr,
-        "shader/ground_fragment.glsl", {},
-        {
-            {"position", position_attribute},
-            {"normal", normal_attribute},
-        }, {},
-        {{"view_properties", view_properties_binding}}
-    );
-
-    mesh ground = load_mesh(
-        "models/arena_vertices.vbo", "models/arena_faces.vbo"
-    );
-    mesh player_mesh = load_mesh(
-        "models/miku_vertices.vbo", "models/miku_faces.vbo"
-    );
-
-    draw_elements_call ground_call{
-        ground.vertex_array.get_name(), ground.size,
-        ground_program.get_name(), GL_TRIANGLES, GL_UNSIGNED_INT
-    };
-
-    ge1::pass objects_pass;
-    objects_pass.renderables.push_back(ground_call);
-
-    ge1::composition composition;
-    composition.passes.push_back(objects_pass);
-
     rendering::game render_game;
     gameplay::game game;
 
@@ -214,6 +183,8 @@ int main() {
     physic_ground.faces = read_file<unsigned>(
         "models/Plane_faces.vbo"
     );
+
+    render_game_pointer = &render_game;
 
     int width, height;
     glfwGetWindowSize(window, &width, &height);
@@ -237,8 +208,6 @@ int main() {
         last_frame = current_frame;
 
         glfwPollEvents();
-
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         gameplay::input input;
 
@@ -285,16 +254,8 @@ int main() {
 
         game.update(input, delta_float);
 
-        view_matrix = lookAt(
-            camera_position,
-            game.player.position + vec3(0, 0, 1.4),
-            vec3(0, 0, 1)
-        );
-
         render_game.update(game);
         render_game.render();
-
-        composition.render();
 
         glfwSwapBuffers(window);
     }
