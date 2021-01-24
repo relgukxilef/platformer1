@@ -14,6 +14,8 @@
 
 #include "utility/vertex_buffer.h"
 
+#include <ge1/framebuffer.h>
+
 using namespace rendering;
 
 const unsigned MAX_PLAYER_COUNT = 1;
@@ -51,41 +53,33 @@ enum : GLuint {
 rendering::game::game() {
     vr = new vr_window();
 
-    glGenFramebuffers(2, eye_framebuffers);
-    glGenRenderbuffers(2, eye_renderbuffers);
-    glGenTextures(2, eye_textures);
+    unsigned samples = 8;
 
     for (auto i = 0u; i < 2; i++) {
         // render buffers
-        glBindFramebuffer(GL_FRAMEBUFFER, eye_framebuffers[i]);
-        glBindRenderbuffer(GL_RENDERBUFFER, eye_framebuffers[i]);
-        glRenderbufferStorage(
-            GL_RENDERBUFFER, GL_DEPTH_COMPONENT, vr->width, vr->height
-        );
-        glFramebufferRenderbuffer(
-            GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-            GL_RENDERBUFFER, eye_renderbuffers[i]
-        );
-        glBindTexture(GL_TEXTURE_2D, eye_textures[i]);
-        glTexImage2D(
-            GL_TEXTURE_2D, 0, GL_RGBA8,
-            static_cast<GLsizei>(vr->width),
-            static_cast<GLsizei>(vr->height),
-            0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr
-        );
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
-        glFramebufferTexture2D(
-            GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-            GL_TEXTURE_2D, eye_textures[i], 0
+        eye_framebuffers[i] = ge1::create_framebuffer_multisample(
+            vr->width, vr->height, samples, {
+                {
+                    GL_COLOR_ATTACHMENT0, &eye_multisample_renderbuffers[i],
+                    GL_RGBA8
+                }
+            }, {
+                {
+                    GL_DEPTH_ATTACHMENT, &eye_depth_renderbuffers[i],
+                    GL_DEPTH_COMPONENT
+                }
+            }
         );
 
-        if (
-            glCheckFramebufferStatus(GL_FRAMEBUFFER) !=
-            GL_FRAMEBUFFER_COMPLETE
-        ) {
-            throw std::runtime_error("Incomplete framebuffer");
-        }
+        // resolve
+        eye_resolve_framebuffers[i] = ge1::create_framebuffer(
+            vr->width, vr->height, GL_TEXTURE_2D, {
+                {
+                    GL_COLOR_ATTACHMENT0, &eye_textures[i],
+                    GL_RGBA8
+                },
+            }
+        );
 
         views[i] = create_mapped_buffer<view>(
             view_buffer[i], sizeof(view)
@@ -292,9 +286,19 @@ void rendering::game::render() {
             MAX_AGENT_COUNT,
             sizeof(ge1::draw_elements_indirect_command)
         );
+
+        // resolve samples
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, eye_resolve_framebuffers[i]);
+        glBlitFramebuffer(
+            0, 0, vr->width, vr->height, 0, 0, vr->width, vr->height,
+            GL_COLOR_BUFFER_BIT, GL_NEAREST
+        );
     }
 
+    vr->submit();
+
     // render desktop view
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, eye_resolve_framebuffers[0]);
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
     float scale = std::min(
         static_cast<float>(vr->width) / desktop_width,
@@ -314,7 +318,6 @@ void rendering::game::render() {
     );
 
     // TODO: desktop only rendering?
-    vr->submit();
 }
 
 void game::set_desktop_size(unsigned width, unsigned height) {

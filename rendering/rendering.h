@@ -58,8 +58,10 @@ namespace rendering {
         ge1::unique_vertex_array arena_vertex_array;
 
         GLuint eye_framebuffers[2];
+        GLuint eye_resolve_framebuffers[2];
+        GLuint eye_multisample_renderbuffers[2];
+        GLuint eye_depth_renderbuffers[2];
         GLuint eye_textures[2];
-        GLuint eye_renderbuffers[2];
 
         // TODO: vr shouldn't be handled by rendering,
         // because it also concerns controller inputs
